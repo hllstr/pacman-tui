@@ -1,0 +1,160 @@
+#!/bin/bash
+
+USER="$(whoami)"
+greet() {
+  clear
+  gum style --border normal --margin "1" --padding "1 2" --border-foreground 212 "Hello $(gum style --foreground 250 $USER)! Welcome to $(gum style --foreground 212 "Pacman Helper TUI")!"
+}
+
+menu() {
+  greet
+  echo "What would you like to do?"
+  OPTIONS=$(gum choose "Update Packages" "Install Packages" "Remove Packages" "Clean Packages" "Exit")
+  case "$OPTIONS" in
+  "Update Packages")
+    update_package
+    ;;
+  "Install Packages")
+    install_package
+    ;;
+  "Remove Packages")
+    remove_package
+    ;;
+  "Clean Packages")
+    clean_package
+    ;;
+  *)
+    gum style --foreground 212 "Exit the Program."
+    echo
+    echo "Sayonara $USER!"
+    sleep 1
+    exit
+    ;;
+  esac
+}
+
+update_package() {
+  gum style --foreground 212 "Updating Packages!"
+  echo
+  bash -c "sudo pacman -Syu --noconfirm && yay -Syu --noconfirm"
+
+  if [ $? -eq 0 ]; then
+    echo
+    gum style --foreground 82 "Update Completed Successfully!"
+  else
+    echo
+    gum style --foreground 196 "Update Failed! Check Internet Connection!"
+  fi
+  echo
+  read -n 1 -s -r -p "Press any key to go back to the menu."
+  menu
+}
+
+install_package() {
+  gum style --foreground 212 "Install a Packages!"
+  echo
+  echo "Where do you want to install the package from?"
+  SOURCE=$(gum choose "Official Repository" "Arch User Repository (AUR)" "Back")
+  case "$SOURCE" in
+  "Official Repository")
+    install_from_pacman
+    ;;
+  "Arch User Repository (AUR)")
+    install_from_yay
+    ;;
+  *)
+    menu
+    ;;
+  esac
+}
+
+install_from_pacman() {
+  gum style --foreground 212 "Arch Official Repository"
+  echo
+  SELECTED=$(pacman -Slq | fzf -m --height 80% --layout=reverse --border --header "Install Packages" --prompt "Search: " --preview 'pacman -Si {}' --preview-window=right:65%:wrap | tr '\n' ' ')
+  if [ -z "$SELECTED" ]; then
+    menu
+    return
+  fi
+
+  if gum confirm "Are you sure you want to install these packages? ( $SELECTED)"; then
+    sudo pacman -S --noconfirm $SELECTED
+    echo
+    gum style --foreground 82 "( $SELECTED) installed!"
+  else
+    gum style --foreground 196 "Aborted."
+  fi
+  echo
+  read -n 1 -s -r -p "Press any key to go back to the menu."
+  menu
+}
+
+install_from_yay() {
+  gum style --foreground 212 "Arch User Repository (AUR)"
+  echo
+  SELECTED=$(yay -Slq | fzf -m --height 80% --layout=reverse --border --header "Install Packages" --prompt "Search: " --preview 'yay -Si {}' --preview-window=right:65%:wrap | tr '\n' ' ')
+  if [ -z "$SELECTED" ]; then
+    menu
+    return
+  fi
+
+  if gum confirm "Are you sure you want to install these packages? ( $SELECTED)"; then
+    yay -S --noconfirm $SELECTED
+    echo
+    gum style --foreground 82 "( $SELECTED) installed!"
+  else
+    gum style --foreground 196 "Aborted."
+  fi
+  echo
+  read -n 1 -s -r -p "Press any key to go back to the menu."
+  menu
+}
+
+remove_package() {
+  gum style --foreground 212 "Removing Packages!"
+  echo
+  SELECTED=$(pacman -Qq | fzf -m --height 80% --layout=reverse --border --header "Remove installed Packages" --prompt "Search: " --preview 'pacman -Qi {}' --preview-window=right:65%:wrap | tr '\n' ' ')
+  if [ -z "$SELECTED" ]; then
+    menu
+    return
+  fi
+
+  if gum confirm "Are you sure you want to remove these packages? ( $SELECTED)"; then
+    sudo pacman -Rns --noconfirm $SELECTED
+    echo
+    gum style --foreground 82 "( $SELECTED) removed!"
+  else
+    gum style --foreground 196 "Aborted."
+  fi
+  echo
+  read -n 1 -s -r -p "Press any key to go back to the menu."
+  menu
+}
+
+clean_package() {
+  gum style --foreground 212 "Cleaning System."
+
+  ORPHANS=$(sudo pacman -Qdtq)
+
+  if [ -n "$ORPHANS" ]; then
+    echo "Orphan packages found: $ORPHANS"
+    if gum confirm "Remove these orphan packages?"; then
+      gum spin --title "Removing orphans..." -- bash -c "sudo pacman -Rns $ORPHANS --noconfirm"
+      gum style --foreground 82 "Orphans removed."
+    fi
+  else
+    gum style --foreground 250 "No orphan packages to clean. Skipping..."
+  fi
+
+  echo
+  if gum confirm "Clean uninstalled package cache (pacman -Sc)?"; then
+    gum spin --title "Cleaning cache..." -- bash -c "sudo pacman -Sc --noconfirm"
+    gum style --foreground 82 "Cache cleaned."
+  fi
+
+  echo
+  read -n 1 -s -r -p "Press any key to go back to the menu."
+  menu
+}
+
+menu
